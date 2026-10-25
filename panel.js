@@ -36,7 +36,8 @@ function removeShot(i){const row=currentRow();if(!row)return;const list=Library.
 function commit(){const row=currentRow();if(row){if(isWeb()){row.keyword=$('web-title').value.trim()||'Untitled entry';row.year=$('year').value.trim();}else row.sentence=$('sentence').value;row.link=$('link').value.trim();if($('notes').dataset.id===row.id&&$('notes').value!==(row.notes||''))row.notes=$('notes').value;}}
 function draw(){
  $('mode').value=mode;
- for(const id of ['capture','keyword-find','keyword','sentence','sentence-label','refresh','find','import-section'])$(id).hidden=isWeb();
+ for(const id of ['capture','add-manual','keyword-find','keyword','sentence','sentence-label','refresh','find','import-section'])$(id).hidden=isWeb();
+ if(isWeb())$('manual-form').hidden=true;
  for(const id of ['add-web','web-title','web-title-label','year','year-label'])$(id).hidden=!isWeb();
  closeImage();$('results').replaceChildren();$('entry').replaceChildren();
  let group=null;
@@ -45,11 +46,11 @@ function draw(){
    group=document.createElement('optgroup');group.label=row.title?.trim()||'Untitled section';group.dataset.id=row.id;$('entry').append(group);continue;
   }
   if(!group){group=document.createElement('optgroup');group.label='Unsectioned';$('entry').append(group);}
-  const option=document.createElement('option');option.value=row.id;option.textContent=row.keyword;group.append(option);
+  const option=document.createElement('option');option.value=row.id;option.textContent=entryName(row);group.append(option);
  }
  if(!currentRow())current=newestRow()?.id||null;
  $('entry').value=current||'';const row=currentRow();$('editor').hidden=!row;
- if(row){$('year').value=row.year||'';$('web-title').value=row.keyword;$('keyword').textContent=row.keyword;$('sentence').value=row.sentence;$('link').value=row.link;if(document.activeElement!==$('notes')||$('notes').dataset.id!==row.id)$('notes').value=row.notes||'';$('notes').dataset.id=row.id;$('show').disabled=$('remove').disabled=!row.screenshot;}
+ if(row){$('year').value=row.year||'';$('web-title').value=row.keyword;$('keyword').textContent=row.keyword;$('keyword').hidden=isWeb()||!row.keyword;$('key-form').hidden=isWeb()||!!row.keyword;if(document.activeElement!==$('key-input'))$('key-input').value='';$('sentence').value=row.sentence;sentenceNote(row);$('link').value=row.link;if(document.activeElement!==$('notes')||$('notes').dataset.id!==row.id)$('notes').value=row.notes||'';$('notes').dataset.id=row.id;$('show').disabled=$('remove').disabled=!row.screenshot;}
  $('paste').textContent=Library.shots(row).length?'Paste another screenshot':'Paste screenshot';
  if(Library.shots(row).length)void openImage();
  drawHeading();
@@ -96,10 +97,10 @@ $('folder').onclick=run(async()=>{if(!discard())return;const handle=await showDi
 $('reconnect').onclick=run(async()=>{if(!discard())return;if(await remembered.requestPermission({mode:'readwrite'})!=='granted')throw Error('Folder access was not granted.');await connect(remembered);});
 $('reload').onclick=run(async()=>{if(!dir)throw Error('Choose a folder first.');if(!discard())return;await connect(dir);});
 $('entry').onchange=()=>{commit();current=$('entry').value;draw();};
-$('year').oninput=$('web-title').oninput=$('sentence').oninput=$('link').oninput=$('notes').oninput=()=>{commit();if(isWeb()){const option=Array.from($('entry').options).find(o=>o.value===current);if(option)option.textContent=currentRow()?.keyword||'';}setDirty();};
+$('year').oninput=$('web-title').oninput=$('sentence').oninput=$('link').oninput=$('notes').oninput=()=>{commit();sentenceNote(currentRow());if(isWeb()){const option=Array.from($('entry').options).find(o=>o.value===current);if(option)option.textContent=currentRow()?.keyword||'';}setDirty();};
 $('capture').onclick=run(async()=>{if(!dir)throw Error('Choose a library folder first.');commit();const found=await editor('captureSelection');let row=data.rows.find(r=>r.kind!=='section'&&r.keyword.toLowerCase()===found.keyword.toLowerCase());if(!row){row={id:Library.uuid(),keyword:found.keyword,sentence:found.sentence||'',link:'',screenshot:'',incomplete:!!found.incomplete,added:Date.now()};data.rows.push(row);dirty=true;}current=row.id;draw();tell(found.incomplete?'Captured keyword. Paste its sentence; source context was unavailable.':dirty?'Entry ready. Save to folder to write it.':'Existing entry selected.');},true);
-$('refresh').onclick=run(async()=>{commit();const row=currentRow();if(!row)return;const result=await editor('findInstances',[row.keyword]),match=result.matches[0];if(!match?.count)throw Error('Keyword not found; sentence kept.');row.sentence=match.sentence;row.incomplete=false;draw();setDirty();});
-const findCurrentInstances=run(async()=>{const row=currentRow();if(!row)return;tell('Finding instances of '+row.keyword+'…');const result=await editor('findInstances',row.keyword);$('results').replaceChildren();for(const match of result.matches){const section=document.createElement('section'),title=document.createElement('strong'),text=document.createElement('p');title.textContent='Line '+match.line;text.textContent=match.sentence+'\n'+match.before+match.match+match.after;section.append(title,text);$('results').append(section);}tell(result.matches.length+' matches in the open source file.');},true);
+$('refresh').onclick=run(async()=>{commit();const row=currentRow();if(!row)return;needKey(row);const result=await editor('findInstances',[row.keyword]),match=result.matches[0];if(!match?.count)throw Error('Keyword not found; sentence kept.');row.sentence=match.sentence;row.incomplete=false;draw();setDirty();});
+const findCurrentInstances=run(async()=>{const row=currentRow();if(!row)return;needKey(row);tell('Finding instances of '+row.keyword+'…');const result=await editor('findInstances',row.keyword);$('results').replaceChildren();for(const match of result.matches){const section=document.createElement('section'),title=document.createElement('strong'),text=document.createElement('p');title.textContent='Line '+match.line;text.textContent=match.sentence+'\n'+match.before+match.match+match.after;section.append(title,text);$('results').append(section);}tell(result.matches.length+' matches in the open source file.');},true);
 $('find').onclick=findCurrentInstances;
 function keywordInstances(){
  const row=currentRow();if(!row)return;
@@ -144,7 +145,7 @@ draw();
 
 function lockConflicts(){
  const blocked=!!sync?.conflicts.length;
- document.querySelectorAll('#editor button,#editor input,#editor textarea,#capture,#add-web,#keyword-find,#save,#import,#legacy').forEach(el=>{const disabled=blocked||foregroundBusy||(['show','remove'].includes(el.id)&&!currentRow()?.screenshot);if(el.disabled!==disabled)el.disabled=disabled;});
+ document.querySelectorAll('#editor button,#editor input,#editor textarea,#capture,#add-manual,#manual-key,#manual-link,#key-input,#key-set,#manual-add,#add-web,#keyword-find,#save,#import,#legacy').forEach(el=>{const disabled=blocked||foregroundBusy||(['show','remove'].includes(el.id)&&!currentRow()?.screenshot);if(el.disabled!==disabled)el.disabled=disabled;});
 }
 function showConflicts(result){
  renderSyncConflicts($('conflicts'),result.conflicts,data,(key,value)=>run(async()=>{applyResult(await sync.resolve(key,value));tell(sync.conflicts.length?'Resolve the remaining versions.':'Conflict resolved and synchronized.');})(),dir);lockConflicts();
@@ -198,9 +199,9 @@ async function handleViewerRequest(){
     if(!row){row={id:request.id,keyword:found.keyword,sentence:found.sentence||'',link:'',screenshot:'',incomplete:!!found.incomplete,added:Date.now()};data.rows.push(row);dirty=true;}
     current=row.id;draw();await flush();result={ok:true,message:'Captured '+found.keyword};
    }else if(request.type==='refresh'||request.type==='find'){
-    const row=data.rows.find(r=>r.id===request.rowId&&r.kind!=='section');if(!row)throw Error('Entry no longer exists.');
+    const row=data.rows.find(r=>r.id===request.rowId&&r.kind!=='section');if(!row)throw Error('Entry no longer exists.');needKey(row);
     const found=await editor('findInstances',request.type==='refresh'?[row.keyword]:row.keyword);
-    if(request.type==='refresh'){const match=found.matches[0];if(!match?.count)throw Error('Keyword not found in the open source file.');row.sentence=match.sentence;dirty=true;draw();await flush();result={ok:true,message:'Sentence refreshed from the first occurrence.'};}
+    if(request.type==='refresh'){const match=found.matches[0];if(!match?.count)throw Error('Keyword not found in the open source file.');row.sentence=match.sentence;row.incomplete=false;dirty=true;draw();await flush();result={ok:true,message:'Sentence refreshed from the first occurrence.'};}
     else result={ok:true,matches:found.matches,message:'Found '+found.matches.length+' instances.'};
    }else throw Error('Unknown request.');
    await Library.write(responses,name,JSON.stringify(result));
@@ -316,3 +317,52 @@ function applyHeading(){
 }
 $('heading-form').onsubmit=e=>{e.preventDefault();applyHeading();};
 $('heading').onkeydown=e=>{if(e.key==='Escape'){$('heading').value=headingOf(current)?.title||'';$('heading').blur();}};
+
+// Add a citation by typing its key (no Overleaf selection needed). The sentence stays empty
+// until you click Refresh this sentence (or type it), so you can find the sentence later.
+function sentenceNote(row){$('sentence-note').hidden=isWeb()||!row||!!String(row.sentence||'').trim();}
+function closeManual(){$('manual-form').hidden=true;$('manual-key').value='';$('manual-link').value='';}
+$('add-manual').onclick=()=>{
+ if(!dir||!data){tell('Choose a library folder first.');return;}
+ if(sync?.conflicts.length){tell('Resolve the conflicting versions first.');return;}
+ $('manual-form').hidden=false;$('manual-key').focus();
+};
+$('manual-cancel').onclick=closeManual;
+$('manual-key').onkeydown=$('manual-link').onkeydown=e=>{if(e.key==='Escape')closeManual();};
+// Same rules as Capture selection: a bare key, {key} or \cite{key}; one key, no spaces/commas/braces.
+function cleanKey(value){return String(value||'').trim().replace(/^\\[A-Za-z]*cite[A-Za-z]*\*?(?:\s*\[[^\]]*\])*\s*\{([^{}]+)\}$/,'$1').replace(/^\{([^{}]+)\}$/,'$1').trim();}
+function badKey(key){return key.length>150||/[\s,{}\\]/.test(key);}
+function sameKey(key,except){return data.rows.find(r=>r.kind!=='section'&&r!==except&&r.keyword&&r.keyword.toLowerCase()===key.toLowerCase());}
+function needKey(row){if(!row.keyword)throw Error('This entry has no citation key yet. Add it under Citation key first.');}
+// Entries added with only a link show as "No citation yet · site" until their key is added.
+function entryName(row){if(row.keyword)return row.keyword;let site='';try{site=new URL(row.link).hostname.replace(/^www\./,'');}catch{}return 'No citation yet'+(site?' · '+site:'');}
+$('manual-form').onsubmit=e=>{
+ e.preventDefault();
+ if(!dir||!data){tell('Choose a library folder first.');return;}
+ if(foregroundBusy){tell('An action is already in progress. Please wait.');return;}
+ if(sync?.conflicts.length){tell('Resolve the conflicting versions first.');return;}
+ const key=cleanKey($('manual-key').value),link=$('manual-link').value.trim();
+ if(!key&&!link){tell('Type a citation key or paste a weblink first.');$('manual-key').focus();return;}
+ if(key&&badKey(key)){tell('Type one citation key, without spaces, commas or braces.');$('manual-key').focus();return;}
+ if(link){let url=null;try{url=new URL(link);}catch{}if(!url||!['https:','http:'].includes(url.protocol)){tell('Paste a complete web address starting with https:// or http://.');$('manual-link').focus();return;}}
+ commit();
+ const existing=key?sameKey(key):data.rows.find(r=>r.kind!=='section'&&r.link&&r.link===link);
+ if(existing){current=existing.id;let added=false;if(link&&!existing.link){existing.link=link;added=true;}closeManual();draw();if(added)setDirty();tell('“'+entryName(existing)+'” is already in this library, so it is selected.'+(added?' The link was added to it.':link&&existing.link!==link?' It already has a different link, which was kept.':''));return;}
+ const row={id:Library.uuid(),keyword:key,sentence:'',link,screenshot:'',incomplete:true,added:Date.now()};
+ data.rows.push(row);current=row.id;closeManual();draw();setDirty();
+ tell(key?'Added “'+key+'”'+(link?' with its link':'')+' and no sentence yet. When it’s in your Overleaf file, click Refresh this sentence.':'Added the link. Type its citation key under Citation key whenever you have it.');
+};
+// Add the citation key later to an entry that was added with only a link.
+$('key-form').onsubmit=e=>{
+ e.preventDefault();
+ const row=currentRow();if(!row||row.keyword)return;
+ if(foregroundBusy){tell('An action is already in progress. Please wait.');return;}
+ if(sync?.conflicts.length){tell('Resolve the conflicting versions first.');return;}
+ const key=cleanKey($('key-input').value);
+ if(!key){tell('Type a citation key first.');return;}
+ if(badKey(key)){tell('Type one citation key, without spaces, commas or braces.');return;}
+ const other=sameKey(key,row);
+ if(other&&!confirm('“'+other.keyword+'” is already another entry in this library. Use this key here too?'))return;
+ commit();row.keyword=key;$('key-input').value='';$('key-input').blur();draw();setDirty();
+ tell('Citation key set to “'+key+'”. Click Refresh this sentence once it’s in your Overleaf file.');
+};

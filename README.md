@@ -106,3 +106,12 @@ Older entries with one screenshot keep working. Paper City still shows the first
 
 ## 2.5.1 — Opens on your newest entry
 When you connect, reconnect or reload a library, **Current entry** is now the entry you added most recently (it used to be the first one in the list). If an entry is added from the viewer or another window, the panel switches to it, unless you're typing in the panel at that moment. New entries record when they were added. For entries saved before this update, the one lowest in the list counts as the newest.
+
+## 2.5.2 — Add a citation manually
+Click **Add citation manually** (next to Capture selection), type the citation key (for example `Lu2016`; `\cite{Lu2016}` also works) and press Enter or **Add**. No Overleaf selection is needed. The entry is created with no sentence, and a note under Sentence reminds you it's still empty. Add screenshots, a weblink, notes or BibTeX as usual. Later, once the citation is in your Overleaf file, click **Refresh this sentence** (or Refresh sentence in the viewer) to fill in the sentence, or type it yourself. If the key is already in the library, that entry is selected instead of adding a duplicate. Esc or Cancel closes the box.
+
+## 2.5.3 — Paste a link when adding manually
+The **Add citation manually** box now has an optional **Weblink** field under the citation key. Paste the paper's link there before clicking **Add**, and the new entry is saved with it (it shows in the entry's Weblink box and in the viewer). Links must start with https:// or http://. If the key is already in the library and has no link yet, the pasted link is added to it; an existing link is never replaced.
+
+## 2.5.4 — Add an entry with just a weblink
+In the **Add citation manually** box the citation key is now optional: paste only a weblink and click **Add**. The entry appears in Current entry as "No citation yet · site name". When you have the citation, type its key in the **Citation key** box at the top of the entry and press Enter or **Set** (in the viewer, type it in the key box of that entry and press Enter or click away). Refresh this sentence and Find instances work once the key is set.
