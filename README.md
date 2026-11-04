@@ -130,3 +130,4 @@ Above the BibTeX box, **Capture BibTeX** reads the paper open in a tab (the acti
 - An empty weblink is set to the paper's doi.org link.
 - 2.6.1: also works on a page that shows BibTeX as text (Google Scholar's "BibTeX" link, a .bib file). The entry is used as is; the DOI (Crossref title search) and PMID (PubMed) are added when found.
 - 2.6.2: **Copy BibTeX** next to Copy citation copies the whole BibTeX entry, ready to paste into your .bib file (panel, viewer and Paper City).
+- 2.6.4: Refresh this sentence / Find instances sit under the Sentence box; Copy citation and Copy BibTeX sit next to Capture BibTeX; the panel reconnects to your last library folder by itself (right away if Chrome allows, otherwise on your first click in the panel).

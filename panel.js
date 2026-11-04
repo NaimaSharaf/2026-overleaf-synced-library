@@ -142,6 +142,15 @@ window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();
 let db;const ready=new Promise(resolve=>{const request=indexedDB.open('overleaf-local-folders',1);request.onupgradeneeded=()=>request.result.createObjectStore('settings');request.onerror=resolve;request.onsuccess=()=>{db=request.result;const get=db.transaction('settings').objectStore('settings').get('lastFolder');get.onsuccess=()=>{remembered=get.result;$('reconnect').hidden=!remembered;resolve();};get.onerror=resolve;};});
 async function remember(handle){await ready;if(!db)return;const tx=db.transaction('settings','readwrite');tx.objectStore('settings').put(handle,'lastFolder');$('reconnect').hidden=false;}
 draw();
+// Auto-reconnect to the last library folder: right away if Chrome still allows it, otherwise on your first click in the panel.
+let autoAsked=false;
+const autoConnect=run(async()=>{if(dir||!remembered)return;await connect(remembered);tell('Reconnected to '+remembered.name+'.');});
+ready.then(async()=>{try{if(remembered&&!dir&&await remembered.queryPermission({mode:'readwrite'})==='granted')await autoConnect();}catch{}});
+document.addEventListener('pointerdown',e=>{
+ if(dir||!remembered||autoAsked||e.target.closest?.('#folder,#reconnect,#mode'))return;
+ autoAsked=true;
+ remembered.requestPermission({mode:'readwrite'}).then(ok=>{if(ok==='granted'&&!dir)return autoConnect();}).catch(()=>{});
+},true);
 
 function lockConflicts(){
  const blocked=!!sync?.conflicts.length;
@@ -383,9 +392,12 @@ $('mode').onchange=async()=>{await changeMode();$('mode').value=mode;};
 // BibTeX box for the current entry (synced with the viewer and Paper City)
 var bibBox=null;
 function drawBib(row){
- const host=$('bib-box');if(!row){host.replaceChildren();bibBox=null;return;}
+ const host=$('bib-box'),bar=document.querySelector('.bib-capture');
+ if(!row){host.replaceChildren();bar?.querySelectorAll('.bib-copy').forEach(b=>b.remove());bibBox=null;return;}
  if(bibBox&&bibBox.dataset.id===row.id&&host.contains(document.activeElement)){bibBox.refresh(row.bibtex);return;}
  bibBox=Bib.field(row,{disabled:!dir,onEdit:()=>setDirty(),tell});bibBox.dataset.id=row.id;host.replaceChildren(bibBox);
+ // Copy citation + Copy BibTeX sit next to Capture BibTeX (they keep working from the box below)
+ if(bar){bar.querySelectorAll('.bib-copy').forEach(b=>b.remove());bibBox.querySelectorAll('.bib-copy').forEach(b=>bar.append(b));}
 }
 
 // Heading for this entry only: changing it moves just this entry under a heading with that name
