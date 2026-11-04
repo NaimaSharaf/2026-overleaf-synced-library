@@ -115,3 +115,18 @@ The **Add citation manually** box now has an optional **Weblink** field under th
 
 ## 2.5.4 — Add an entry with just a weblink
 In the **Add citation manually** box the citation key is now optional: paste only a weblink and click **Add**. The entry appears in Current entry as "No citation yet · site name". When you have the citation, type its key in the **Citation key** box at the top of the entry and press Enter or **Set** (in the viewer, type it in the key box of that entry and press Enter or click away). Refresh this sentence and Find instances work once the key is set.
+
+## New blank entry (2.5.2)
+Click **New blank entry** in the panel's top bar to add an empty entry and fill it in as you go: keyword, sentence, screenshots, weblink, notes and BibTeX. It is placed right after the entry you are on, so it stays under the same heading (change it with the heading box). In Overleaf mode a blank entry shows as "No citation yet" with the **Citation key** box (from 2.5.4) until you set its key, or until **Capture BibTeX** fills it in. It syncs to the viewer and Paper City like any other entry. Works in Websurfing mode too.
+
+## Capture weblink (2.5.3)
+Next to the Weblink box, **Capture weblink** puts the address of the page you are viewing into the current entry. If the active tab is Overleaf, it uses the web page you visited most recently instead, so you can look at a paper, come back to Overleaf and capture its link.
+
+## Capture BibTeX + keyword autofill (2.6.0)
+Above the BibTeX box, **Capture BibTeX** reads the paper open in a tab (the active tab, or the web page you visited last if you are on Overleaf). It finds the paper's DOI (page metadata, the link, the PDF, or a Crossref title search), gets the BibTeX from doi.org, adds the PMID from PubMed, and fills the entry's BibTeX box. The first time, Chrome asks to allow the paper's site, doi.org, Crossref and PubMed.
+- Overleaf entry with a keyword: the BibTeX key is set to that keyword, so \cite{keyword} matches.
+- Blank entry without a keyword: the keyword is filled in as author + year + first title word (e.g. bonnell2019structure), and the BibTeX uses that key.
+- Websurfing: an empty title is filled with the paper title, and the year with the paper's year.
+- An empty weblink is set to the paper's doi.org link.
+- 2.6.1: also works on a page that shows BibTeX as text (Google Scholar's "BibTeX" link, a .bib file). The entry is used as is; the DOI (Crossref title search) and PMID (PubMed) are added when found.
+- 2.6.2: **Copy BibTeX** next to Copy citation copies the whole BibTeX entry, ready to paste into your .bib file (panel, viewer and Paper City).

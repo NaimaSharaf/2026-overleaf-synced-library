@@ -303,11 +303,13 @@ globalThis.Bib=(()=>{
   area.setAttribute('aria-label','BibTeX for '+(row.keyword||'this entry'));label.append(area);
   const out=document.createElement('div');out.className='bib-out';const cite=document.createElement('code');cite.className='bib-cite';
   const copy=document.createElement('button');copy.type='button';copy.className='bib-copy';copy.textContent='Copy citation';
+  const copyBib=document.createElement('button');copyBib.type='button';copyBib.className='bib-copy';copyBib.textContent='Copy BibTeX';copyBib.title='Copy the whole BibTeX entry (to paste into your .bib file)';
   const note=document.createElement('span');note.className='bib-note';
-  const show=()=>{const c=citation(area.value,row.year);cite.textContent=c.text||'—';copy.disabled=!c.text;note.textContent=c.missing.length?'Missing: '+c.missing.join(', '):'';};
+  const show=()=>{const c=citation(area.value,row.year);cite.textContent=c.text||'—';copy.disabled=!c.text;copyBib.disabled=!area.value.trim();note.textContent=c.missing.length?'Missing: '+c.missing.join(', '):'';};
   area.oninput=()=>{row.bibtex=area.value;show();onEdit?.(area.value);};
   copy.onclick=async()=>{const c=citation(area.value,row.year);try{await copyStyled(c.text);tell('Copied: '+c.text+(c.missing.length?' (missing '+c.missing.join(', ')+')':''));copy.textContent='Copied ✓';setTimeout(()=>copy.textContent='Copy citation',1500);}catch{tell('Clipboard unavailable. Select the citation and copy it manually.');}};
-  out.append(cite,copy,note);box.append(label,out);show();
+  copyBib.onclick=async()=>{const t=area.value.trim();if(!t)return;try{await navigator.clipboard.writeText(t+'\n');tell('Copied the BibTeX entry'+(parse(t)?.key?' '+parse(t).key:'')+'. Paste it into your .bib file.');copyBib.textContent='Copied ✓';setTimeout(()=>copyBib.textContent='Copy BibTeX',1500);}catch{tell('Clipboard unavailable. Select the BibTeX text and copy it manually.');}};
+  out.append(cite,copy,copyBib,note);box.append(label,out);show();
   box.refresh=value=>{if(document.activeElement!==area&&area.value!==(value||'')){area.value=value||'';show();}};
   return box;
  }
