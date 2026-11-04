@@ -33,7 +33,7 @@ async function openImage(){
 }
 function moveShot(i,step){const row=currentRow();if(!row)return;const list=Library.shots(row),j=i+step;if(j<0||j>=list.length)return;[list[i],list[j]]=[list[j],list[i]];Library.setShots(row,list);draw();setDirty();}
 function removeShot(i){const row=currentRow();if(!row)return;const list=Library.shots(row),[gone]=list.splice(i,1);pending.delete(gone);Library.setShots(row,list);draw();setDirty();tell('Screenshot removed.');}
-function commit(){const row=currentRow();if(row){if(isWeb()){row.keyword=$('web-title').value.trim()||'Untitled entry';row.year=$('year').value.trim();}else row.sentence=$('sentence').value;row.link=$('link').value.trim();if($('notes').dataset.id===row.id&&$('notes').value!==(row.notes||''))row.notes=$('notes').value;}}
+function commit(){const row=currentRow();if(row){if(isWeb()){row.keyword=$('web-title').value.trim()||'Untitled entry';row.year=$('year').value.trim();}else{if(row.manual)row.keyword=$('web-title').value.trim();row.sentence=$('sentence').value;}row.link=$('link').value.trim();if($('notes').dataset.id===row.id&&$('notes').value!==(row.notes||''))row.notes=$('notes').value;}}
 function draw(){
  $('mode').value=mode;
  for(const id of ['capture','keyword-find','keyword','sentence','sentence-label','refresh','find','import-section'])$(id).hidden=isWeb();
@@ -45,11 +45,12 @@ function draw(){
    group=document.createElement('optgroup');group.label=row.title?.trim()||'Untitled section';group.dataset.id=row.id;$('entry').append(group);continue;
   }
   if(!group){group=document.createElement('optgroup');group.label='Unsectioned';$('entry').append(group);}
-  const option=document.createElement('option');option.value=row.id;option.textContent=row.keyword;group.append(option);
+  const option=document.createElement('option');option.value=row.id;option.textContent=row.keyword||'(untitled entry)';group.append(option);
  }
  if(!currentRow())current=newestRow()?.id||null;
  $('entry').value=current||'';const row=currentRow();$('editor').hidden=!row;
  if(row){$('year').value=row.year||'';$('web-title').value=row.keyword;$('keyword').textContent=row.keyword;$('sentence').value=row.sentence;$('link').value=row.link;if(document.activeElement!==$('notes')||$('notes').dataset.id!==row.id)$('notes').value=row.notes||'';$('notes').dataset.id=row.id;$('show').disabled=$('remove').disabled=!row.screenshot;}
+ if(!isWeb()){const manual=!!row?.manual;$('web-title').hidden=$('web-title-label').hidden=!manual;$('keyword').hidden=manual&&!row.keyword;$('web-title-label').textContent=manual?'Keyword':'Title / keyword';$('web-title').placeholder=manual?'Citation key or keyword (fill in later)':'Name this entry';}else{$('web-title-label').textContent='Title / keyword';$('web-title').placeholder='Name this entry';}
  $('paste').textContent=Library.shots(row).length?'Paste another screenshot':'Paste screenshot';
  if(Library.shots(row).length)void openImage();
  drawHeading();
@@ -96,7 +97,7 @@ $('folder').onclick=run(async()=>{if(!discard())return;const handle=await showDi
 $('reconnect').onclick=run(async()=>{if(!discard())return;if(await remembered.requestPermission({mode:'readwrite'})!=='granted')throw Error('Folder access was not granted.');await connect(remembered);});
 $('reload').onclick=run(async()=>{if(!dir)throw Error('Choose a folder first.');if(!discard())return;await connect(dir);});
 $('entry').onchange=()=>{commit();current=$('entry').value;draw();};
-$('year').oninput=$('web-title').oninput=$('sentence').oninput=$('link').oninput=$('notes').oninput=()=>{commit();if(isWeb()){const option=Array.from($('entry').options).find(o=>o.value===current);if(option)option.textContent=currentRow()?.keyword||'';}setDirty();};
+$('year').oninput=$('web-title').oninput=$('sentence').oninput=$('link').oninput=$('notes').oninput=()=>{commit();if(isWeb()||currentRow()?.manual){const option=Array.from($('entry').options).find(o=>o.value===current);if(option)option.textContent=currentRow()?.keyword||'(untitled entry)';if(!isWeb())$('keyword').textContent=currentRow()?.keyword||'';}setDirty();};
 $('capture').onclick=run(async()=>{if(!dir)throw Error('Choose a library folder first.');commit();const found=await editor('captureSelection');let row=data.rows.find(r=>r.kind!=='section'&&r.keyword.toLowerCase()===found.keyword.toLowerCase());if(!row){row={id:Library.uuid(),keyword:found.keyword,sentence:found.sentence||'',link:'',screenshot:'',incomplete:!!found.incomplete,added:Date.now()};data.rows.push(row);dirty=true;}current=row.id;draw();tell(found.incomplete?'Captured keyword. Paste its sentence; source context was unavailable.':dirty?'Entry ready. Save to folder to write it.':'Existing entry selected.');},true);
 $('refresh').onclick=run(async()=>{commit();const row=currentRow();if(!row)return;const result=await editor('findInstances',[row.keyword]),match=result.matches[0];if(!match?.count)throw Error('Keyword not found; sentence kept.');row.sentence=match.sentence;row.incomplete=false;draw();setDirty();});
 const findCurrentInstances=run(async()=>{const row=currentRow();if(!row)return;tell('Finding instances of '+row.keyword+'…');const result=await editor('findInstances',row.keyword);$('results').replaceChildren();for(const match of result.matches){const section=document.createElement('section'),title=document.createElement('strong'),text=document.createElement('p');title.textContent='Line '+match.line;text.textContent=match.sentence+'\n'+match.before+match.match+match.after;section.append(title,text);$('results').append(section);}tell(result.matches.length+' matches in the open source file.');},true);
@@ -144,7 +145,7 @@ draw();
 
 function lockConflicts(){
  const blocked=!!sync?.conflicts.length;
- document.querySelectorAll('#editor button,#editor input,#editor textarea,#capture,#add-web,#keyword-find,#save,#import,#legacy').forEach(el=>{const disabled=blocked||foregroundBusy||(['show','remove'].includes(el.id)&&!currentRow()?.screenshot);if(el.disabled!==disabled)el.disabled=disabled;});
+ document.querySelectorAll('#editor button,#editor input,#editor textarea,#capture,#add-web,#add-blank,#keyword-find,#save,#import,#legacy').forEach(el=>{const disabled=blocked||foregroundBusy||(['show','remove'].includes(el.id)&&!currentRow()?.screenshot);if(el.disabled!==disabled)el.disabled=disabled;});
 }
 function showConflicts(result){
  renderSyncConflicts($('conflicts'),result.conflicts,data,(key,value)=>run(async()=>{applyResult(await sync.resolve(key,value));tell(sync.conflicts.length?'Resolve the remaining versions.':'Conflict resolved and synchronized.');})(),dir);lockConflicts();
@@ -233,6 +234,93 @@ $('open-viewer').onclick=async()=>{
  }catch(error){tell(error.message);}
 };
 
+// Capture weblink: the active tab's address. If that tab is Overleaf, use the web page you looked at most recently instead.
+async function paperTab(){
+ const web=t=>/^https?:\/\//i.test(t?.url||'')&&!/^https:\/\/(www\.)?overleaf\.com\//i.test(t.url);
+ let [tab]=await chrome.tabs.query({active:true,currentWindow:true});
+ if(!web(tab)){const tabs=(await chrome.tabs.query({})).filter(web).sort((a,b)=>(b.lastAccessed||0)-(a.lastAccessed||0));tab=tabs[0];}
+ if(!tab)throw Error('Open the paper or web page in a tab first.');
+ return tab;
+}
+$('capture-link').onclick=run(async()=>{
+ const row=currentRow();if(!row)throw Error('Capture or select an entry first.');
+ const tab=await paperTab();
+ $('link').value=tab.url;commit();setDirty();draw();
+ tell('Weblink captured: '+(tab.title||tab.url).slice(0,80));
+});
+// Capture BibTeX: find the DOI of the paper open in a tab, get its BibTeX from doi.org, add the PMID from PubMed,
+// and autofill the keyword (an empty keyword gets the BibTeX key; an existing keyword becomes the BibTeX key so \cite{} matches).
+const DOI_RE=/10\.\d{4,9}\/[^\s"'<>()\[\]{}]+/i;
+const cleanDoi=d=>(d||'').replace(/^.*?(10\.\d{4,9}\/)/i,'$1').replace(/[.,;)\]]+$/,'').replace(/\.pdf$/i,'').replace(/\/(full|abstract|pdf|epdf)$/i,'');
+async function doiFromTitle(title){        // Crossref title search; accepted only when the title words match
+ try{const r=await (await fetch('https://api.crossref.org/works?rows=1&select=DOI,title&query.bibliographic='+encodeURIComponent(title))).json(),it=r.message.items[0];
+  const w=s=>new Set(String(s).toLowerCase().split(/\W+/).filter(x=>x.length>3)),a=w(title),b=w((it?.title||[''])[0]);
+  if(it&&[...a].filter(x=>b.has(x)).length>=Math.max(3,a.size*0.8))return it.DOI;}catch{}
+ return '';
+}
+async function findPaper(tab){
+ let meta={};
+ try{[{result:meta}]=await chrome.scripting.executeScript({target:{tabId:tab.id},func:()=>{
+  const one=(...ns)=>{for(const n of ns){const m=document.querySelector(`meta[name="${n}" i], meta[property="${n}" i]`);if(m?.content?.trim())return m.content.trim();}return '';};
+  const body=(document.body?.innerText||'').slice(0,200000),m=body.match(/(?:doi[:\s]*|doi\.org\/)(10\.\d{4,9}\/[^\s"'<>()\[\]{}]+)/i);
+  const bib=/^\s*@\s*[A-Za-z]+\s*[{(]/.test(body)?body.trim():'';
+  return {bib,doi:one('citation_doi','dc.identifier','prism.doi','bepress_citation_doi'),pmid:one('citation_pmid'),title:one('citation_title','dc.title','og:title')||document.title,textDoi:m?m[1]:'',pdf:document.contentType==='application/pdf'};
+ }})||[{result:{}}];}catch{meta={pdf:true};}
+ if(meta?.bib){const p=Bib.parse(meta.bib);if(p)return {bib:meta.bib,doi:cleanDoi(p.fields.doi||''),pmid:(p.fields.pmid||'').replace(/\D/g,''),title:Bib.clean(p.fields.title||'')};}
+ let doi=cleanDoi(meta?.doi)||cleanDoi((decodeURIComponent(tab.url).match(DOI_RE)||[''])[0]);
+ const ax=tab.url.match(/arxiv\.org\/(?:abs|pdf)\/(\d{4}\.\d{4,5})/i);if(!doi&&ax)doi='10.48550/arXiv.'+ax[1];
+ if(!doi&&(meta?.pdf||/\.pdf($|[?#])/i.test(tab.url))){try{const b=await (await fetch(tab.url,{credentials:'include'})).blob(),t=new TextDecoder('latin1').decode(await b.slice(0,600000).arrayBuffer()),m=t.match(/(?:doi[:\s=>"]*|doi\.org\/)(10\.\d{4,9}\/[^\s"'<>()\[\]{}]+)/i);if(m)doi=cleanDoi(m[1]);}catch{}}
+ if(!doi&&meta?.textDoi)doi=cleanDoi(meta.textDoi);
+ const title=(meta?.title||tab.title||'').replace(/\s*[|–—-]\s*[^|–—-]{0,40}$/,'').trim();
+ if(!doi&&title.split(/\s+/).length>3){       // no DOI on the page: look the title up on Crossref
+  doi=await doiFromTitle(title);
+ }
+ return {doi,pmid:(meta?.pmid||'').replace(/\D/g,''),title};
+}
+function tidyBib(text,key,extra){            // one field per line, chosen key, extra fields (pmid)
+ const p=Bib.parse(text);if(!p)return text.trim();
+ const f={...p.fields,...extra};delete f.abstract;
+ return '@'+p.type+'{'+key+',\n'+Object.entries(f).filter(([,v])=>String(v).trim()).map(([k,v])=>'  '+k+' = {'+String(v).trim()+'}').join(',\n')+'\n}';
+}
+function makeKey(p){                          // smith2020structure
+ const a=Bib.firstAuthor(p.fields.author||p.fields.editor||''),y=(p.fields.year||'').replace(/\D/g,'');
+ const stop=/^(a|an|the|of|on|in|for|and|to|with|by|from|at|via|is|are)$/i,w=(Bib.clean(p.fields.title||'').split(/[^A-Za-z0-9]+/).find(x=>x.length>2&&!stop.test(x))||'');
+ return ((a?.last||'ref').normalize('NFKD').replace(/[^A-Za-z]/g,'')+y+w).toLowerCase()||p.key;
+}
+$('capture-bib').onclick=run(async()=>{
+ const row=currentRow();if(!row)throw Error('Capture or select an entry first.');
+ const tab=await paperTab();
+ const origins=[new URL(tab.url).origin+'/*','https://doi.org/*','https://*.crossref.org/*','https://*.datacite.org/*','https://eutils.ncbi.nlm.nih.gov/*'];
+ if(!await chrome.permissions.request({origins}))throw Error('Allow access to the paper’s site and doi.org to capture its BibTeX.');
+ tell('Looking up the BibTeX for '+(tab.title||tab.url).slice(0,70)+'…');
+ const found=await findPaper(tab);
+ let raw;
+ if(found.bib){                            // the page shows BibTeX itself (Google Scholar, a .bib file, …)
+  raw=found.bib;
+  if(!found.doi&&found.title)found.doi=await doiFromTitle(found.title);
+ }else{
+  if(!found.doi)throw Error('No DOI found on this page. Open the journal page, or Google Scholar’s BibTeX page for the paper.');
+  const r=await fetch('https://doi.org/'+encodeURI(found.doi),{headers:{Accept:'application/x-bibtex; charset=utf-8'}});
+  if(!r.ok)throw Error('doi.org could not give BibTeX for '+found.doi+' ('+r.status+').');
+  raw=await r.text();
+ }
+ const p=Bib.parse(raw);if(!p)throw Error('Could not read a BibTeX entry'+(found.doi?' for '+found.doi:'')+'.');
+ let pmid=found.pmid||(Bib.parse(raw).fields.pmid||'').replace(/\D/g,'');
+ const pubmed=async term=>{try{const j=await (await fetch('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&term='+encodeURIComponent(term))).json();return j.esearchresult?.idlist?.length===1?j.esearchresult.idlist[0]:'';}catch{return '';}};
+ if(!pmid&&found.doi)pmid=await pubmed(found.doi+'[doi]');
+ if(!pmid&&p.fields.title)pmid=await pubmed('"'+Bib.clean(p.fields.title).replace(/"/g,'')+'"[Title]');
+ commit();
+ const kw=(row.keyword||'').trim(),hasKw=kw&&kw!=='Untitled entry';
+ let key=p.key,filled='';
+ if(isWeb()){key=makeKey(p);if(!hasKw){row.keyword=Bib.clean(p.fields.title||'')||key;filled='title';}if(!row.year&&p.fields.year)row.year=p.fields.year.replace(/\D/g,'').slice(0,4);}
+ else if(hasKw)key=kw;                     // keep \cite{keyword} working
+ else{key=makeKey(p);row.keyword=key;filled='keyword';}
+ const extra={};if(found.doi&&!p.fields.doi)extra.doi=found.doi;if(pmid)extra.pmid=pmid;
+ row.bibtex=tidyBib(raw,key,extra);
+ if(!row.link&&found.doi)row.link='https://doi.org/'+found.doi;
+ setDirty();draw();
+ tell('BibTeX captured for '+key+(pmid?' (PMID '+pmid+')':' (no PMID found)')+(filled==='keyword'?' · keyword set to '+key:filled==='title'?' · title filled in':''));
+},true);
 $('open-link').onclick=async()=>{
  try{
   const value=$('link').value.trim();
@@ -276,6 +364,18 @@ $('add-web').onclick=run(async()=>{
  if(!keyword)throw Error('Highlight a word on the webpage, then click Capture highlighted word.');
  commit();const row={id:Library.uuid(),keyword,year:'',sentence:'',link:'',screenshot:'',added:Date.now()};
  data.rows.push(row);current=row.id;setDirty();draw();$('year').focus();
+});
+
+// Blank entry: an empty row you fill in as you go (keyword, sentence, screenshots, link, notes, BibTeX).
+// It goes right after the entry you are on, so it stays under the same heading.
+$('add-blank').onclick=run(async()=>{
+ if(!sync)throw Error('Choose a library folder first.');
+ commit();const row={id:Library.uuid(),keyword:'',sentence:'',link:'',screenshot:'',notes:'',added:Date.now()};
+ if(isWeb())row.year='';else row.manual=true;
+ const here=data.rows.findIndex(r=>r.id===current);
+ if(here<0)data.rows.push(row);else data.rows.splice(here+1,0,row);
+ current=row.id;setDirty();draw();$('web-title').value='';$('web-title').focus();
+ tell('Blank entry added. Fill it in as you go; it syncs automatically.');
 });
 
 $('mode').onchange=async()=>{await changeMode();$('mode').value=mode;};
