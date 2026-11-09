@@ -3,7 +3,7 @@
   "name": "Overleaf Synced Library",
   "version": "2.6.4",
   "minimum_chrome_version": "114",
-  "description": "Save Overleaf evidence or Websurfing links and screenshots to a shared local library.",
+  "description": "Save Overleaf evidence, links and screenshots to a shared local library.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",

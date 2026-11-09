@@ -1,6 +1,5 @@
 const $=id=>document.getElementById(id);
-let mode='overleaf',dir=null,data=null,pending=new Map(),current=null,dirty=false,busy=false,foregroundBusy=false,actionWaiting=false,previewURL=null,previewGeneration=0,remembered=null,sync=null,syncTimer=null,boundTab=null,editGeneration=0;
-const isWeb=()=>mode==='websurfing';
+let dir=null,data=null,pending=new Map(),current=null,dirty=false,busy=false,foregroundBusy=false,actionWaiting=false,previewURL=null,previewGeneration=0,remembered=null,sync=null,syncTimer=null,boundTab=null,editGeneration=0;
 const tell=text=>$('status').textContent=text;
 function setDirty(){editGeneration++;dirty=true;tell('Syncing shortly…');clearTimeout(syncTimer);syncTimer=setTimeout(tick,900);}
 // The entry added most recently: highest "added" time; entries saved before this existed count as older, newest = lowest in the list.
@@ -33,12 +32,8 @@ async function openImage(){
 }
 function moveShot(i,step){const row=currentRow();if(!row)return;const list=Library.shots(row),j=i+step;if(j<0||j>=list.length)return;[list[i],list[j]]=[list[j],list[i]];Library.setShots(row,list);draw();setDirty();}
 function removeShot(i){const row=currentRow();if(!row)return;const list=Library.shots(row),[gone]=list.splice(i,1);pending.delete(gone);Library.setShots(row,list);draw();setDirty();tell('Screenshot removed.');}
-function commit(){const row=currentRow();if(row){if(isWeb()){row.keyword=$('web-title').value.trim()||'Untitled entry';row.year=$('year').value.trim();}else row.sentence=$('sentence').value;row.link=$('link').value.trim();if($('notes').dataset.id===row.id&&$('notes').value!==(row.notes||''))row.notes=$('notes').value;}}
+function commit(){const row=currentRow();if(row){row.sentence=$('sentence').value;row.link=$('link').value.trim();if($('notes').dataset.id===row.id&&$('notes').value!==(row.notes||''))row.notes=$('notes').value;}}
 function draw(){
- $('mode').value=mode;
- for(const id of ['capture','add-manual','keyword-find','keyword','sentence','sentence-label','refresh','find','import-section'])$(id).hidden=isWeb();
- if(isWeb())$('manual-form').hidden=true;
- for(const id of ['add-web','web-title','web-title-label','year','year-label'])$(id).hidden=!isWeb();
  closeImage();$('results').replaceChildren();$('entry').replaceChildren();
  let group=null;
  for(const row of data?.rows||[]){
@@ -50,7 +45,7 @@ function draw(){
  }
  if(!currentRow())current=newestRow()?.id||null;
  $('entry').value=current||'';const row=currentRow();$('editor').hidden=!row;
- if(row){$('year').value=row.year||'';$('web-title').value=row.keyword;$('keyword').textContent=row.keyword;$('keyword').hidden=isWeb()||!row.keyword;$('key-form').hidden=isWeb()||!!row.keyword;if(document.activeElement!==$('key-input'))$('key-input').value='';$('sentence').value=row.sentence;sentenceNote(row);$('link').value=row.link;if(document.activeElement!==$('notes')||$('notes').dataset.id!==row.id)$('notes').value=row.notes||'';$('notes').dataset.id=row.id;$('show').disabled=$('remove').disabled=!row.screenshot;}
+ if(row){$('keyword').textContent=row.keyword;$('keyword').hidden=!row.keyword;$('key-form').hidden=!!row.keyword;if(document.activeElement!==$('key-input'))$('key-input').value='';$('sentence').value=row.sentence;sentenceNote(row);$('link').value=row.link;if(document.activeElement!==$('notes')||$('notes').dataset.id!==row.id)$('notes').value=row.notes||'';$('notes').dataset.id=row.id;$('show').disabled=$('remove').disabled=!row.screenshot;}
  $('paste').textContent=Library.shots(row).length?'Paste another screenshot':'Paste screenshot';
  if(Library.shots(row).length)void openImage();
  drawHeading();
@@ -70,7 +65,7 @@ async function active(ignoreLibrary=false){
  if(!project)throw Error('Open your Overleaf project tab first.');boundTab=tab.id;
  return {tab,project,name:(tab.title||'Overleaf').replace(/\s*[-–—|]\s*Overleaf.*$/i,'')};
 }
-async function editor(type,keyword){if(isWeb())throw Error('Overleaf actions are unavailable in Websurfing mode.');const info=await active();if(data&&data.project!==info.project)throw Error('This library belongs to another Overleaf project. Choose its folder first.');try{const result=await chrome.tabs.sendMessage(info.tab.id,{type,keyword});if(!result?.ok)throw Error(result?.error||'Could not read selection.');return result;}catch(e){if(/Receiving end|establish connection/.test(e.message))throw Error('Reload the Overleaf tab after updating the extension.');throw e;}}
+async function editor(type,keyword){const info=await active();if(data&&data.project!==info.project)throw Error('This library belongs to another Overleaf project. Choose its folder first.');try{const result=await chrome.tabs.sendMessage(info.tab.id,{type,keyword});if(!result?.ok)throw Error(result?.error||'Could not read selection.');return result;}catch(e){if(/Receiving end|establish connection/.test(e.message))throw Error('Reload the Overleaf tab after updating the extension.');throw e;}}
 function run(fn,waitForSync=false){return async()=>{
  if(foregroundBusy||actionWaiting){tell('An action is already in progress. Please wait.');return;}
  if(busy){
@@ -85,10 +80,11 @@ function run(fn,waitForSync=false){return async()=>{
  busy=true;foregroundBusy=true;document.querySelectorAll('button,input,select,textarea').forEach(el=>el.disabled=true);try{await fn();if(dirty&&sync)await flush();}catch(e){tell(e.name==='AbortError'?'Cancelled.':e.message);}finally{busy=false;foregroundBusy=false;document.querySelectorAll('button,input,select,textarea').forEach(el=>el.disabled=false);const row=currentRow();$('show').disabled=$('remove').disabled=!row?.screenshot;lockConflicts();}};}
 async function connect(handle){
  const loaded=await Library.read(handle);let next=loaded;
- if(!next){if(isWeb())next=Library.empty('websurfing:'+Library.uuid(),handle.name);else{const info=await active(true);next=Library.empty(info.project,info.name);}}
+ if(!next){const info=await active(true);next=Library.empty(info.project,info.name);}
  const connection=new SyncLibrary(handle,'Capture extension');
  const result=await connection.initialize(next);
- mode=result.data.project.startsWith('websurfing:')?'websurfing':'overleaf';dir=handle;sync=connection;data=result.data;pending=new Map();current=null;dirty=false;draw();showConflicts(result);
+ if(result.data.project.startsWith('websurfing:'))throw Error('This folder holds a Websurfing library. Websurfing mode has been removed; choose an Overleaf library folder.');
+ dir=handle;sync=connection;data=result.data;pending=new Map();current=null;dirty=false;draw();showConflicts(result);
  const response=await fetch(chrome.runtime.getURL('viewer.html'));if(!response.ok)throw Error('Viewer unavailable.');await Library.write(dir,'viewer.html',await response.text());
  await sync.snapshot(data);tell('Connected to '+dir.name+'. Automatic sync is on. Open viewer.html and choose this folder.');remembered=handle;await remember(handle);
 }
@@ -97,7 +93,7 @@ $('folder').onclick=run(async()=>{if(!discard())return;const handle=await showDi
 $('reconnect').onclick=run(async()=>{if(!discard())return;if(await remembered.requestPermission({mode:'readwrite'})!=='granted')throw Error('Folder access was not granted.');await connect(remembered);});
 $('reload').onclick=run(async()=>{if(!dir)throw Error('Choose a folder first.');if(!discard())return;await connect(dir);});
 $('entry').onchange=()=>{commit();current=$('entry').value;draw();};
-$('year').oninput=$('web-title').oninput=$('sentence').oninput=$('link').oninput=$('notes').oninput=()=>{commit();sentenceNote(currentRow());if(isWeb()){const option=Array.from($('entry').options).find(o=>o.value===current);if(option)option.textContent=currentRow()?.keyword||'';}setDirty();};
+$('sentence').oninput=$('link').oninput=$('notes').oninput=()=>{commit();sentenceNote(currentRow());setDirty();};
 $('capture').onclick=run(async()=>{if(!dir)throw Error('Choose a library folder first.');commit();const found=await editor('captureSelection');let row=data.rows.find(r=>r.kind!=='section'&&r.keyword.toLowerCase()===found.keyword.toLowerCase());if(!row){row={id:Library.uuid(),keyword:found.keyword,sentence:found.sentence||'',link:'',screenshot:'',incomplete:!!found.incomplete,added:Date.now()};data.rows.push(row);dirty=true;}current=row.id;draw();tell(found.incomplete?'Captured keyword. Paste its sentence; source context was unavailable.':dirty?'Entry ready. Save to folder to write it.':'Existing entry selected.');},true);
 $('refresh').onclick=run(async()=>{commit();const row=currentRow();if(!row)return;needKey(row);const result=await editor('findInstances',[row.keyword]),match=result.matches[0];if(!match?.count)throw Error('Keyword not found; sentence kept.');row.sentence=match.sentence;row.incomplete=false;draw();setDirty();});
 const findCurrentInstances=run(async()=>{const row=currentRow();if(!row)return;needKey(row);tell('Finding instances of '+row.keyword+'…');const result=await editor('findInstances',row.keyword);$('results').replaceChildren();for(const match of result.matches){const section=document.createElement('section'),title=document.createElement('strong'),text=document.createElement('p');title.textContent='Line '+match.line;text.textContent=match.sentence+'\n'+match.before+match.match+match.after;section.append(title,text);$('results').append(section);}tell(result.matches.length+' matches in the open source file.');},true);
@@ -147,14 +143,14 @@ let autoAsked=false;
 const autoConnect=run(async()=>{if(dir||!remembered)return;await connect(remembered);tell('Reconnected to '+remembered.name+'.');});
 ready.then(async()=>{try{if(remembered&&!dir&&await remembered.queryPermission({mode:'readwrite'})==='granted')await autoConnect();}catch{}});
 document.addEventListener('pointerdown',e=>{
- if(dir||!remembered||autoAsked||e.target.closest?.('#folder,#reconnect,#mode'))return;
+ if(dir||!remembered||autoAsked||e.target.closest?.('#folder,#reconnect'))return;
  autoAsked=true;
  remembered.requestPermission({mode:'readwrite'}).then(ok=>{if(ok==='granted'&&!dir)return autoConnect();}).catch(()=>{});
 },true);
 
 function lockConflicts(){
  const blocked=!!sync?.conflicts.length;
- document.querySelectorAll('#editor button,#editor input,#editor textarea,#capture,#add-manual,#add-blank,#manual-key,#manual-link,#key-input,#key-set,#manual-add,#add-web,#keyword-find,#save,#import,#legacy').forEach(el=>{const disabled=blocked||foregroundBusy||(['show','remove'].includes(el.id)&&!currentRow()?.screenshot);if(el.disabled!==disabled)el.disabled=disabled;});
+ document.querySelectorAll('#editor button,#editor input,#editor textarea,#capture,#add-manual,#add-blank,#manual-key,#manual-link,#manual-capture-link,#key-input,#key-set,#manual-add,#keyword-find,#save,#import,#legacy').forEach(el=>{const disabled=blocked||foregroundBusy||(['show','remove'].includes(el.id)&&!currentRow()?.screenshot);if(el.disabled!==disabled)el.disabled=disabled;});
 }
 function showConflicts(result){
  renderSyncConflicts($('conflicts'),result.conflicts,data,(key,value)=>run(async()=>{applyResult(await sync.resolve(key,value));tell(sync.conflicts.length?'Resolve the remaining versions.':'Conflict resolved and synchronized.');})(),dir);lockConflicts();
@@ -257,6 +253,12 @@ $('capture-link').onclick=run(async()=>{
  $('link').value=tab.url;commit();setDirty();draw();
  tell('Weblink captured: '+(tab.title||tab.url).slice(0,80));
 });
+// The same capture, for the weblink of an entry being added manually.
+$('manual-capture-link').onclick=run(async()=>{
+ const tab=await paperTab();
+ $('manual-link').value=tab.url;
+ tell('Weblink captured: '+(tab.title||tab.url).slice(0,80));
+});
 // Capture BibTeX: find the DOI of the paper open in a tab, get its BibTeX from doi.org, add the PMID from PubMed,
 // and autofill the keyword (an empty keyword gets the BibTeX key; an existing keyword becomes the BibTeX key so \cite{} matches).
 const DOI_RE=/10\.\d{4,9}\/[^\s"'<>()\[\]{}]+/i;
@@ -321,8 +323,7 @@ $('capture-bib').onclick=run(async()=>{
  commit();
  const kw=(row.keyword||'').trim(),hasKw=kw&&kw!=='Untitled entry';
  let key=p.key,filled='';
- if(isWeb()){key=makeKey(p);if(!hasKw){row.keyword=Bib.clean(p.fields.title||'')||key;filled='title';}if(!row.year&&p.fields.year)row.year=p.fields.year.replace(/\D/g,'').slice(0,4);}
- else if(hasKw)key=kw;                     // keep \cite{keyword} working
+ if(hasKw)key=kw;                     // keep \cite{keyword} working
  else{key=makeKey(p);row.keyword=key;filled='keyword';}
  const extra={};if(found.doi&&!p.fields.doi)extra.doi=found.doi;if(pmid)extra.pmid=pmid;
  row.bibtex=tidyBib(raw,key,extra);
@@ -340,54 +341,18 @@ $('open-link').onclick=async()=>{
  }catch(error){tell(error.message);}
 };
 
-const changeMode=run(async()=>{
- const requested=$('mode').value;
- try{
-  commit();if(dirty&&sync)await flush();
-  if(dirty||sync?.conflicts.length)throw Error('Save changes and resolve conflicts before changing modes.');
-  mode=requested;dir=null;data=null;sync=null;current=null;pending.clear();draw();
-  tell('Choose a '+(isWeb()?'Websurfing':'Overleaf')+' library folder. Use an empty folder to start a new session.');
- }finally{$('mode').value=mode;}
-});
-$('add-web').onclick=run(async()=>{
- if(!sync||!isWeb())throw Error('Choose a Websurfing library folder first.');
- const [tab]=await chrome.tabs.query({active:true,currentWindow:true});
- if(!tab?.url||!/^https?:\/\//i.test(tab.url))throw Error('Open a webpage and highlight a word first.');
- const origin=new URL(tab.url).origin+'/*';
- if(!await chrome.permissions.request({origins:[origin]}))throw Error('Allow access to this website to capture its highlighted text.');
- let results;
- try{results=await chrome.scripting.executeScript({target:{tabId:tab.id},func:()=>{
-  function selected(win){
-   try{
-    const el=win.document.activeElement;
-    if(el?.tagName==='TEXTAREA'||(el?.tagName==='INPUT'&&['text','search','url','tel'].includes(el.type))){
-     const text=el.value.slice(el.selectionStart||0,el.selectionEnd||0).trim();if(text)return text;
-    }
-    const text=win.getSelection()?.toString().trim();if(text)return text;
-    for(let i=0;i<win.frames.length;i++){const text=selected(win.frames[i]);if(text)return text;}
-   }catch{}return '';
-  }
-  return selected(window);
- }});}catch{throw Error('This page cannot be read. Try a regular webpage with selectable text.');}
- const keyword=results?.[0]?.result?.trim();
- if(!keyword)throw Error('Highlight a word on the webpage, then click Capture highlighted word.');
- commit();const row={id:Library.uuid(),keyword,year:'',sentence:'',link:'',screenshot:'',added:Date.now()};
- data.rows.push(row);current=row.id;setDirty();draw();$('year').focus();
-});
-
 // Blank entry: an empty row you fill in as you go (keyword, sentence, screenshots, link, notes, BibTeX).
 // It goes right after the entry you are on, so it stays under the same heading.
 $('add-blank').onclick=run(async()=>{
  if(!sync)throw Error('Choose a library folder first.');
  commit();const row={id:Library.uuid(),keyword:'',sentence:'',link:'',screenshot:'',notes:'',added:Date.now()};
- if(isWeb())row.year='';else row.incomplete=true;
+ row.incomplete=true;
  const here=data.rows.findIndex(r=>r.id===current);
  if(here<0)data.rows.push(row);else data.rows.splice(here+1,0,row);
- current=row.id;setDirty();draw();if(isWeb()){$('web-title').value='';$('web-title').focus();}else $('key-input').focus();
+ current=row.id;setDirty();draw();$('key-input').focus();
  tell('Blank entry added. Fill it in as you go; it syncs automatically.');
 });
 
-$('mode').onchange=async()=>{await changeMode();$('mode').value=mode;};
 
 // BibTeX box for the current entry (synced with the viewer and Paper City)
 var bibBox=null;
@@ -431,7 +396,7 @@ $('heading').onkeydown=e=>{if(e.key==='Escape'){$('heading').value=headingOf(cur
 
 // Add a citation by typing its key (no Overleaf selection needed). The sentence stays empty
 // until you click Refresh this sentence (or type it), so you can find the sentence later.
-function sentenceNote(row){$('sentence-note').hidden=isWeb()||!row||!!String(row.sentence||'').trim();}
+function sentenceNote(row){$('sentence-note').hidden=!row||!!String(row.sentence||'').trim();}
 function closeManual(){$('manual-form').hidden=true;$('manual-key').value='';$('manual-link').value='';}
 $('add-manual').onclick=()=>{
  if(!dir||!data){tell('Choose a library folder first.');return;}
