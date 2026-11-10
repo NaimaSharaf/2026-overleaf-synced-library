@@ -18,6 +18,9 @@
  // Connect to the copy and prove the entries came across before reporting success.
  async function switchTo(r,note='',prefix=''){
   const before=data?.rows.length||0;
+  // Point "Reconnect saved folder" at the copy before connecting, so it sticks
+  // even if connecting fails partway.
+  remembered=r.copy;await remember(r.copy);
   await connect(r.copy);
   const after=data?.rows.length||0;
   const head=prefix||`Now working in \u201c${r.name}\u201d (${r.files} file${r.files===1?'':'s'} copied)${note}.`;
@@ -63,28 +66,22 @@
  }
 
  // The folder picker needs a live user gesture, so it opens first — before any prompt or sync.
- async function startCopy(defaultName,askSwitch){
+ async function startCopy(defaultName){
   if(!dir){tell('Choose a library folder first.');return;}
   const target=await pickTarget();if(!target)return;
   const wanted=clean(prompt('Name for the new folder in “'+target.name+'”:',defaultName)||'');
   if(!wanted){tell('Cancelled. Nothing was copied.');return;}
-  const keepWorking=askSwitch
-   ? confirm('Work in the copy from now on?\n\nOK: switch to “'+wanted+'”.\nCancel: stay in “'+dir.name+'”.')
-   : true;
-  const staying=dir.name;
   const r=await copyInto(target,wanted);
-  const note=r.name===wanted?'':` (“${wanted}” already existed there)`;
-  if(keepWorking)await switchTo(r,note);
-  else tell(`Saved a copy as “${r.name}” in ${r.target.name}${note} — ${r.files} file${r.files===1?'':'s'}. Still working in “${staying}”.`);
+  await switchTo(r,r.name===wanted?'':` (“${wanted}” already existed there)`);
  }
 
- $('copy-folder').onclick=()=>startCopy(clean(dir?.name||'library')+'-'+stamp(),true)
+ $('copy-folder').onclick=()=>startCopy(clean(dir?.name||'library')+'-'+stamp())
   .catch(e=>tell(e.name==='AbortError'?'Cancelled.':'Copy failed: '+e.message));
 
  $('rename-folder').onclick=()=>{
   if(!dir){tell('Choose a library folder first.');return;}
   const oldName=dir.name;
-  startCopy(oldName,false)
+  startCopy(oldName)
    .then(()=>{if(dir&&dir.name!==oldName)tell($('status').textContent+` Delete the old “${oldName}” folder yourself once you have checked it.`);})
    .catch(e=>tell(e.name==='AbortError'?'Cancelled.':'Rename failed: '+e.message));
  };

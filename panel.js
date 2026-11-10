@@ -125,7 +125,6 @@ $('keyword-find').onclick=run(async()=>{
 
 // Each new screenshot is added to the entry; earlier ones are kept.
 async function attach(blob){const row=currentRow();if(!row)throw Error('Capture or select an entry first.');const image=await Library.picture(blob),path='images/'+Library.uuid()+'.png';pending.set(path,image);Library.setShots(row,[...Library.shots(row),path]);draw();setDirty();tell('Screenshot added ('+Library.shots(row).length+' for this entry).');}
-$('image').onchange=run(async()=>{for(const file of $('image').files)await attach(file);$('image').value='';});
 $('paste').onclick=run(async()=>{if(!currentRow())throw Error('Select an entry first.');if(!await chrome.permissions.request({permissions:['clipboardRead']}))throw Error('Use ⌘V / Ctrl+V on the Paste screenshot button instead.');for(const item of await navigator.clipboard.read()){const type=item.types.find(t=>['image/png','image/jpeg','image/webp'].includes(t));if(type){await attach(await item.getType(type));return;}}throw Error('No screenshot found in the clipboard.');});
 $('paste').addEventListener('paste',event=>{event.preventDefault();const files=Array.from(event.clipboardData.items).filter(i=>i.kind==='file'&&i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);if(files.length)run(async()=>{for(const file of files)await attach(file);})();else tell('No image in clipboard.');});
 $('show').onclick=run(async()=>{if(!$('preview').hidden){closeImage();return;}await openImage();});
@@ -150,7 +149,7 @@ document.addEventListener('pointerdown',e=>{
 
 function lockConflicts(){
  const blocked=!!sync?.conflicts.length;
- document.querySelectorAll('#editor button,#editor input,#editor textarea,#capture,#add-manual,#add-blank,#manual-key,#manual-link,#manual-capture-link,#key-input,#key-set,#manual-add,#keyword-find,#save,#import,#legacy').forEach(el=>{const disabled=blocked||foregroundBusy||(['show','remove'].includes(el.id)&&!currentRow()?.screenshot);if(el.disabled!==disabled)el.disabled=disabled;});
+ document.querySelectorAll('#editor button,#editor input,#editor textarea,#capture,#add-manual,#key-input,#key-set,#keyword-find,#save,#import,#legacy').forEach(el=>{const disabled=blocked||foregroundBusy||(['show','remove'].includes(el.id)&&!currentRow()?.screenshot);if(el.disabled!==disabled)el.disabled=disabled;});
 }
 function showConflicts(result){
  renderSyncConflicts($('conflicts'),result.conflicts,data,(key,value)=>run(async()=>{applyResult(await sync.resolve(key,value));tell(sync.conflicts.length?'Resolve the remaining versions.':'Conflict resolved and synchronized.');})(),dir);lockConflicts();
@@ -253,12 +252,6 @@ $('capture-link').onclick=run(async()=>{
  $('link').value=tab.url;commit();setDirty();draw();
  tell('Weblink captured: '+(tab.title||tab.url).slice(0,80));
 });
-// The same capture, for the weblink of an entry being added manually.
-$('manual-capture-link').onclick=run(async()=>{
- const tab=await paperTab();
- $('manual-link').value=tab.url;
- tell('Weblink captured: '+(tab.title||tab.url).slice(0,80));
-});
 // Capture BibTeX: find the DOI of the paper open in a tab, get its BibTeX from doi.org, add the PMID from PubMed,
 // and autofill the keyword (an empty keyword gets the BibTeX key; an existing keyword becomes the BibTeX key so \cite{} matches).
 const DOI_RE=/10\.\d{4,9}\/[^\s"'<>()\[\]{}]+/i;
@@ -341,19 +334,6 @@ $('open-link').onclick=async()=>{
  }catch(error){tell(error.message);}
 };
 
-// Blank entry: an empty row you fill in as you go (keyword, sentence, screenshots, link, notes, BibTeX).
-// It goes right after the entry you are on, so it stays under the same heading.
-$('add-blank').onclick=run(async()=>{
- if(!sync)throw Error('Choose a library folder first.');
- commit();const row={id:Library.uuid(),keyword:'',sentence:'',link:'',screenshot:'',notes:'',added:Date.now()};
- row.incomplete=true;
- const here=data.rows.findIndex(r=>r.id===current);
- if(here<0)data.rows.push(row);else data.rows.splice(here+1,0,row);
- current=row.id;setDirty();draw();$('key-input').focus();
- tell('Blank entry added. Fill it in as you go; it syncs automatically.');
-});
-
-
 // BibTeX box for the current entry (synced with the viewer and Paper City)
 var bibBox=null;
 function drawBib(row){
@@ -397,14 +377,6 @@ $('heading').onkeydown=e=>{if(e.key==='Escape'){$('heading').value=headingOf(cur
 // Add a citation by typing its key (no Overleaf selection needed). The sentence stays empty
 // until you click Refresh this sentence (or type it), so you can find the sentence later.
 function sentenceNote(row){$('sentence-note').hidden=!row||!!String(row.sentence||'').trim();}
-function closeManual(){$('manual-form').hidden=true;$('manual-key').value='';$('manual-link').value='';}
-$('add-manual').onclick=()=>{
- if(!dir||!data){tell('Choose a library folder first.');return;}
- if(sync?.conflicts.length){tell('Resolve the conflicting versions first.');return;}
- $('manual-form').hidden=false;$('manual-key').focus();
-};
-$('manual-cancel').onclick=closeManual;
-$('manual-key').onkeydown=$('manual-link').onkeydown=e=>{if(e.key==='Escape')closeManual();};
 // Same rules as Capture selection: a bare key, {key} or \cite{key}; one key, no spaces/commas/braces.
 function cleanKey(value){return String(value||'').trim().replace(/^\\[A-Za-z]*cite[A-Za-z]*\*?(?:\s*\[[^\]]*\])*\s*\{([^{}]+)\}$/,'$1').replace(/^\{([^{}]+)\}$/,'$1').trim();}
 function badKey(key){return key.length>150||/[\s,{}\\]/.test(key);}
@@ -412,22 +384,22 @@ function sameKey(key,except){return data.rows.find(r=>r.kind!=='section'&&r!==ex
 function needKey(row){if(!row.keyword)throw Error('This entry has no citation key yet. Add it under Citation key first.');}
 // Entries added with only a link show as "No citation yet · site" until their key is added.
 function entryName(row){if(row.keyword)return row.keyword;let site='';try{site=new URL(row.link).hostname.replace(/^www\./,'');}catch{}return 'No citation yet'+(site?' · '+site:'');}
-$('manual-form').onsubmit=e=>{
- e.preventDefault();
+
+// Add citation manually: make an empty entry right after the one you are on (so it keeps the
+// same heading) and edit it here like any other entry — key, sentence, weblink, screenshots,
+// notes, BibTeX. The duplicate-key check happens when the citation key is set.
+$('add-manual').onclick=()=>{
  if(!dir||!data){tell('Choose a library folder first.');return;}
  if(foregroundBusy){tell('An action is already in progress. Please wait.');return;}
  if(sync?.conflicts.length){tell('Resolve the conflicting versions first.');return;}
- const key=cleanKey($('manual-key').value),link=$('manual-link').value.trim();
- if(!key&&!link){tell('Type a citation key or paste a weblink first.');$('manual-key').focus();return;}
- if(key&&badKey(key)){tell('Type one citation key, without spaces, commas or braces.');$('manual-key').focus();return;}
- if(link){let url=null;try{url=new URL(link);}catch{}if(!url||!['https:','http:'].includes(url.protocol)){tell('Paste a complete web address starting with https:// or http://.');$('manual-link').focus();return;}}
  commit();
- const existing=key?sameKey(key):data.rows.find(r=>r.kind!=='section'&&r.link&&r.link===link);
- if(existing){current=existing.id;let added=false;if(link&&!existing.link){existing.link=link;added=true;}closeManual();draw();if(added)setDirty();tell('“'+entryName(existing)+'” is already in this library, so it is selected.'+(added?' The link was added to it.':link&&existing.link!==link?' It already has a different link, which was kept.':''));return;}
- const row={id:Library.uuid(),keyword:key,sentence:'',link,screenshot:'',incomplete:true,added:Date.now()};
- data.rows.push(row);current=row.id;closeManual();draw();setDirty();
- tell(key?'Added “'+key+'”'+(link?' with its link':'')+' and no sentence yet. When it’s in your Overleaf file, click Refresh this sentence.':'Added the link. Type its citation key under Citation key whenever you have it.');
+ const row={id:Library.uuid(),keyword:'',sentence:'',link:'',screenshot:'',notes:'',incomplete:true,added:Date.now()};
+ const here=data.rows.findIndex(r=>r.id===current);
+ if(here<0)data.rows.push(row);else data.rows.splice(here+1,0,row);
+ current=row.id;setDirty();draw();$('key-input').focus();
+ tell('New entry. Fill it in here; it syncs automatically.');
 };
+
 // Add the citation key later to an entry that was added with only a link.
 $('key-form').onsubmit=e=>{
  e.preventDefault();

@@ -12,3 +12,5 @@
 .sentence-tools{margin-top:6px}
 
 .bottom-bar{margin-top:20px;padding-top:14px;border-top:1px solid #2b3170}
+
+.entry-row{margin:0}.entry-row select{flex:1;min-width:0}.entry-row #keyword-find{flex:0 0 auto}
